@@ -8,6 +8,9 @@ namespace fuse_driver {
     std::pair<std::string, std::string> get_parent_path(const std::string& path);
     void traverse_recursively(const file_system::Dir* inode, const std::string& dir_path, std::vector<std::pair<std::string, file_system::Inode*>>& res);
     struct timespec get_current_time_spec();
+    uid_t get_current_uid();
+    gid_t get_current_gid();
+    bool check_acess(const file_system::Inode_stat& stat, int operation_type); // operation_type: 0 - read, 1 - write, 2 - execute
 
     int getattr(const char *path, struct stat *stbuf) {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->getattr_(path, stbuf);
@@ -73,18 +76,22 @@ namespace fuse_driver {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->utimens_(path, tv);
     }
 
-    int chmod(const char *, mode_t) {
-        // TODO: implement
-        return 0;
+    int chmod(const char *path, mode_t mode) {
+        return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->chmod_(path, mode);
     }
 
-    int chown(const char *, uid_t, gid_t) {
-        // TODO: implement
-        return 0;
+    int chown(const char *path, uid_t uid, gid_t gid) {
+        return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->chown_(path, uid, gid);
     }
 
     Driver::Driver() { 
-        file_system::Inode_stat root_stats(file_system::Node_type::dir, 0666, get_current_time_spec());
+        file_system::Inode_stat root_stats(
+            file_system::Node_type::dir, 
+            0666, 
+            get_current_time_spec(),
+            get_current_uid(),
+            get_current_gid()
+        );
         file_system::Dir* root_dir = new file_system::Dir(root_stats);
 
         fs.add_node("/", root_dir);
@@ -142,6 +149,9 @@ namespace fuse_driver {
         if (inode == nullptr) {
             return -ENOENT;
         }
+        if (!check_acess(inode->stat, 0)) {
+            return -EACCES;
+        }
 
         auto stat = inode->stat.fuse_stat();
         memcpy(stbuf, &stat, sizeof(stat));
@@ -154,6 +164,9 @@ namespace fuse_driver {
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
             return -ENOENT;
+        }
+        if (!check_acess(inode->stat, 0)) {
+            return -EACCES;
         }
 
         fi->fh = inode->stat.inode_id;
@@ -173,6 +186,9 @@ namespace fuse_driver {
         }
         if (inode->type() == file_system::Node_type::dir) {
             return -EISDIR;
+        }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
         }
 
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
@@ -200,6 +216,9 @@ namespace fuse_driver {
         if (inode->type() == file_system::Node_type::dir) {
             return -EISDIR;
         }
+        if (!check_acess(inode->stat, 0)) {
+            return -EACCES;
+        }
 
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
         size = std::max((size_t)0, std::min(size, file->stat.content_size - offset));
@@ -216,6 +235,9 @@ namespace fuse_driver {
         }
         if (inode->type() == file_system::Node_type::dir) {
             return -EISDIR;
+        }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
         }
 
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
@@ -263,6 +285,9 @@ namespace fuse_driver {
         }
         if (inode->type() == file_system::Node_type::dir) {
             return -EISDIR;
+        }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
         }
 
         auto [parent_path, sub_path] = get_parent_path(path);
@@ -372,10 +397,19 @@ namespace fuse_driver {
         if (parent->type() != file_system::Node_type::dir) {
             return -ENOTDIR;
         }
+        if (!check_acess(parent->stat, 1)) {
+            return -EACCES;
+        }
 
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
 
-        file_system::Inode_stat stat(file_system::Node_type::file, mode, get_current_time_spec());
+        file_system::Inode_stat stat(
+            file_system::Node_type::file, 
+            mode, 
+            get_current_time_spec(),
+            get_current_uid(),
+            get_current_gid()
+        );
         file_system::File* new_file = new file_system::File(stat);
         
         fs.add_node(path, new_file);
@@ -395,12 +429,16 @@ namespace fuse_driver {
         if (inode->type() != file_system::Node_type::dir) {
             return -ENOTDIR;
         }
+        if (!check_acess(inode->stat, 0)) {
+            return -EACCES;
+        }
+
         fi->fh = inode->stat.inode_id;
 
         return 0;
     }
 
-    int Driver::releasedir_(const char *path, struct fuse_file_info *fi) { 
+    int Driver::releasedir_(const char *path, struct fuse_file_info *fi) {
         return 0;
     }
 
@@ -413,6 +451,9 @@ namespace fuse_driver {
         }
         if (inode->type() != file_system::Node_type::dir) {
             return -ENOTDIR;
+        }
+        if (!check_acess(inode->stat, 0)) {
+            return -EACCES;
         }
 
         file_system::Dir* dir = reinterpret_cast<file_system::Dir*>(inode);
@@ -443,9 +484,18 @@ namespace fuse_driver {
         if (parent->type() != file_system::Node_type::dir) {
             return -ENOTDIR;
         }
+        if (!check_acess(parent->stat, 1)) {
+            return -EACCES;
+        }
 
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
-        file_system::Inode_stat stat(file_system::Node_type::dir, mode, get_current_time_spec());
+        file_system::Inode_stat stat(
+            file_system::Node_type::dir, 
+            mode, 
+            get_current_time_spec(),
+            get_current_uid(),
+            get_current_gid()
+        );
         file_system::Dir* new_dir = new file_system::Dir(stat);
 
         fs.add_node(path, new_dir);
@@ -469,6 +519,9 @@ namespace fuse_driver {
         if (inode->type() != file_system::Node_type::dir) {
             return -ENOTDIR;
         }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
+        }
         
         file_system::Dir* dir = reinterpret_cast<file_system::Dir*>(inode);
         if (dir->sub_nodes.size() != 2) {
@@ -487,6 +540,10 @@ namespace fuse_driver {
         if (parent->type() != file_system::Node_type::dir) {
             return -ENOTDIR;
         }
+        if (!check_acess(parent->stat, 1)) {
+            return -EACCES;
+        }
+
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
 
         parent_dir->sub_nodes.erase(sub_path);
@@ -504,6 +561,9 @@ namespace fuse_driver {
         if (inode == nullptr) {
             return -ENOENT;
         }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
+        }
         
         struct timespec current_time = get_current_time_spec();
 
@@ -519,6 +579,39 @@ namespace fuse_driver {
             inode->stat.time_modified = tv[1];
         }
 
+        return 0;
+    }
+
+    int Driver::chmod_(const char* path, mode_t mode) {
+        std::unique_lock lock{fs.layout_lock};
+
+        file_system::Inode* inode = fs.get_node(path);
+        if (inode == nullptr) {
+            return -ENOENT;
+        }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
+        }
+
+        inode->stat.mode = mode;
+        return 0;
+    }
+
+    int Driver::chown_(const char* path, uid_t uid, gid_t gid) {
+        std::unique_lock lock{fs.layout_lock};
+
+        file_system::Inode* inode = fs.get_node(path);
+        if (inode == nullptr) {
+            return -ENOENT;
+        }
+        if (!check_acess(inode->stat, 1)) {
+            return -EACCES;
+        }
+        
+        if (uid != 4294967295) {
+            inode->stat.uid = uid;
+        }
+        inode->stat.gid = gid;
         return 0;
     }
 
@@ -549,5 +642,47 @@ namespace fuse_driver {
         struct timespec current_time;
         clock_gettime(CLOCK_REALTIME, &current_time);
         return current_time;
+    }
+
+    uid_t get_current_uid() {
+        return fuse_get_context()->uid;
+    }
+
+    gid_t get_current_gid() {
+        return fuse_get_context()->gid;
+    }
+
+    bool check_acess(const file_system::Inode_stat& stat, int operation_type) {
+        uid_t cuid = get_current_uid();
+        gid_t cgid = get_current_gid();
+
+        if (cuid == 0) 
+            return 0;
+
+        int RA, WA, XA;
+        RA = S_IROTH;
+        WA = S_IWOTH;
+        XA = S_IXOTH;
+
+        if (cuid == stat.uid) {
+            RA = S_IRUSR;
+            WA = S_IWUSR;
+            XA = S_IXUSR;
+        } else if (cgid == stat.gid) {
+            RA = S_IRGRP;
+            WA = S_IWGRP;
+            XA = S_IXGRP;
+        }
+
+        switch (operation_type) {
+            case 0:
+                return stat.mode & RA;
+            case 1: 
+                return stat.mode & WA;
+            case 2: 
+                return stat.mode & XA;
+            default:
+                return false;
+        }
     }
 }

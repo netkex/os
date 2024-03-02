@@ -45,7 +45,10 @@ namespace fuse_driver {
         int readdir_(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
         int mkdir_(const char *path, mode_t mode);
         int rmdir_(const char *path);
+
         int utimens_(const char* path, const struct timespec tv[2]);
+        int chmod_(const char* path, mode_t mode);
+        int chown_(const char* path, uid_t uid, gid_t gid);
 
         friend int getattr(const char *path, struct stat *stbuf);
         friend int open(const char *path, struct fuse_file_info *fi);
@@ -64,6 +67,6 @@ namespace fuse_driver {
         friend int rmdir(const char *path);
         friend int utimens(const char* path, const struct timespec tv[2]);
         friend int chmod(const char* path, mode_t mode);
-        friend int chown(const char* path, uid_t a, gid_t b);
+        friend int chown(const char* path, uid_t uid, gid_t gid);
     };
 }
