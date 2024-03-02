@@ -192,14 +192,15 @@ namespace fuse_driver {
         }
 
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
-        if (file->stat.content_size > size) {
+        if (file->stat.content_size > (size_t) size) {
             file->stat.content_size = size;
         }
-        if (file->capacity < size) {
+        if (file->capacity < (size_t) size) {
             char* new_data = (char*) malloc(size * sizeof(char));
             memcpy(new_data, file->data, file->stat.content_size * sizeof(char));
             std::swap(new_data, file->data);
             free(new_data);
+            file->capacity = size;
         }
 
         file->stat.time_modified = get_current_time_spec();
@@ -241,7 +242,7 @@ namespace fuse_driver {
         }
 
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
-        if (file->capacity < offset + size) {
+        if (file->capacity < (size_t)(offset + size)) {
             char* new_data = (char*) malloc((offset + size) * sizeof(char));
             memcpy(new_data, file->data, file->stat.content_size * sizeof(char));
             std::swap(new_data, file->data);

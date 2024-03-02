@@ -44,9 +44,9 @@ namespace file_system {
         ~File(); 
 
         char* data;
-        int capacity = init_capacity;
+        size_t capacity = init_capacity;
     private: 
-        static const int init_capacity = 10;
+        static const size_t init_capacity = 10;
     };
 
     class Dir: public Inode {
