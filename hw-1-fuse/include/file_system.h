@@ -20,11 +20,13 @@ namespace file_system {
     struct Inode_stat {
         Node_type node_type;
         mode_t mode;
+        struct timespec time_modified;
+        struct timespec time_accessed;
 
         int32_t inode_id;
         size_t content_size;
         nlink_t nlinks;
-        Inode_stat(Node_type node_type, mode_t mode);
+        Inode_stat(Node_type node_type, mode_t mode, struct timespec time_created);
         struct stat fuse_stat();
     };
 

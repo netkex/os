@@ -5,9 +5,10 @@
 namespace file_system {
     static std::atomic<int> inode_id_counter = 1;
 
-    Inode_stat::Inode_stat(Node_type node_type, mode_t mode): node_type{node_type}, mode{mode} {
+    Inode_stat::Inode_stat(Node_type node_type, mode_t mode, struct timespec time_created): node_type{node_type}, mode{mode} {
         inode_id = inode_id_counter++;
         content_size = (node_type == Node_type::dir) ? 4096 : 0;
+        time_modified = time_accessed = time_created;
         nlinks = 0;
     }
 
@@ -16,6 +17,8 @@ namespace file_system {
         fs_stat.st_mode = mode | ((node_type == Node_type::file) ? S_IFREG : S_IFDIR);
         fs_stat.st_nlink = nlinks;
         fs_stat.st_size = content_size;
+        fs_stat.st_atim = time_accessed;
+        fs_stat.st_mtim = time_modified;
         return fs_stat;
     }
 

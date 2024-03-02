@@ -2,10 +2,12 @@
 
 #include <algorithm> 
 #include <chrono>
+#include <time.h>
 
 namespace fuse_driver {
     std::pair<std::string, std::string> get_parent_path(const std::string& path);
     void traverse_recursively(const file_system::Dir* inode, const std::string& dir_path, std::vector<std::pair<std::string, file_system::Inode*>>& res);
+    struct timespec get_current_time_spec();
 
     int getattr(const char *path, struct stat *stbuf) {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->getattr_(path, stbuf);
@@ -67,9 +69,8 @@ namespace fuse_driver {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->rmdir_(path);
     }
 
-    int utimens(const char *, const struct timespec tv[2]) {
-        // TODO: implement
-        return 0;
+    int utimens(const char *path, const struct timespec tv[2]) {
+        return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->utimens_(path, tv);
     }
 
     int chmod(const char *, mode_t) {
@@ -83,7 +84,7 @@ namespace fuse_driver {
     }
 
     Driver::Driver() { 
-        file_system::Inode_stat root_stats(file_system::Node_type::dir, 0666);
+        file_system::Inode_stat root_stats(file_system::Node_type::dir, 0666, get_current_time_spec());
         file_system::Dir* root_dir = new file_system::Dir(root_stats);
 
         fs.add_node("/", root_dir);
@@ -185,6 +186,7 @@ namespace fuse_driver {
             free(new_data);
         }
 
+        file->stat.time_modified = get_current_time_spec();
         return 0;
     }
 
@@ -228,6 +230,7 @@ namespace fuse_driver {
 
         memcpy(file->data + offset, wbuf, size * sizeof(char));
         file->stat.content_size = std::max(file->stat.content_size, offset + size);
+        file->stat.time_modified = get_current_time_spec();
         return size;
     }
 
@@ -276,6 +279,7 @@ namespace fuse_driver {
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
 
         parent_dir->sub_nodes.erase(sub_path);
+        parent_dir->stat.time_modified = get_current_time_spec();
         fs.remove_node(path);
         return 0;
     }
@@ -371,11 +375,12 @@ namespace fuse_driver {
 
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
 
-        file_system::Inode_stat stat(file_system::Node_type::file, mode);
+        file_system::Inode_stat stat(file_system::Node_type::file, mode, get_current_time_spec());
         file_system::File* new_file = new file_system::File(stat);
         
         fs.add_node(path, new_file);
         parent_dir->sub_nodes[sub_path] = new_file;
+        parent_dir->stat.time_modified = get_current_time_spec();
         return 0;
     }
 
@@ -440,7 +445,7 @@ namespace fuse_driver {
         }
 
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
-        file_system::Inode_stat stat(file_system::Node_type::dir, mode);
+        file_system::Inode_stat stat(file_system::Node_type::dir, mode, get_current_time_spec());
         file_system::Dir* new_dir = new file_system::Dir(stat);
 
         fs.add_node(path, new_dir);
@@ -450,6 +455,7 @@ namespace fuse_driver {
         new_dir->sub_nodes[".."] = parent_dir;
 
         parent_dir->sub_nodes[sub_path] = new_dir;
+        parent_dir->stat.time_modified = get_current_time_spec();
         return 0;
     }
 
@@ -484,9 +490,35 @@ namespace fuse_driver {
         file_system::Dir* parent_dir = reinterpret_cast<file_system::Dir*>(parent);
 
         parent_dir->sub_nodes.erase(sub_path);
+        parent_dir->stat.time_modified = get_current_time_spec();
         fs.remove_node(std::string(path) + "/.");
         fs.remove_node(std::string(path) + "/..");
         fs.remove_node(path);
+        return 0;
+    }
+
+    int Driver::utimens_(const char* path, const struct timespec tv[2]) {
+        std::unique_lock lock{fs.layout_lock};
+
+        file_system::Inode* inode = fs.get_node(path);
+        if (inode == nullptr) {
+            return -ENOENT;
+        }
+        
+        struct timespec current_time = get_current_time_spec();
+
+        if (tv[0].tv_nsec == UTIME_NOW) {
+            inode->stat.time_accessed = current_time;
+        } else if (tv[0].tv_nsec != UTIME_OMIT) {
+            inode->stat.time_accessed = tv[0];
+        }
+
+        if (tv[1].tv_nsec == UTIME_NOW) {
+            inode->stat.time_modified = current_time;
+        } else if (tv[1].tv_nsec != UTIME_OMIT) {
+            inode->stat.time_modified = tv[1];
+        }
+
         return 0;
     }
 
@@ -511,5 +543,11 @@ namespace fuse_driver {
                 traverse_recursively(reinterpret_cast<file_system::Dir*>(sub_inode), dir_path + file_system::delimeter + sub_path, res);
             }
         }
+    }
+
+    struct timespec get_current_time_spec() {
+        struct timespec current_time;
+        clock_gettime(CLOCK_REALTIME, &current_time);
+        return current_time;
     }
 }
