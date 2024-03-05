@@ -84,7 +84,7 @@ namespace fuse_driver {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->chown_(path, uid, gid);
     }
 
-    Driver::Driver() { 
+    Driver::Driver(): fs{10} { 
         file_system::Inode_stat root_stats(
             file_system::Node_type::dir, 
             0666, 
@@ -143,7 +143,8 @@ namespace fuse_driver {
     }
 
     int Driver::getattr_(const char *path, struct stat *stbuf) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -159,7 +160,8 @@ namespace fuse_driver {
     }
 
     int Driver::open_(const char *path, struct fuse_file_info *fi) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -178,7 +180,8 @@ namespace fuse_driver {
     }
 
     int Driver::truncate_(const char *path, off_t size) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::unique_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -208,7 +211,8 @@ namespace fuse_driver {
     }
 
     int Driver::read_(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) { 
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -228,7 +232,8 @@ namespace fuse_driver {
     }
 
     int Driver::write_(const char *path, const char *wbuf, size_t size, off_t offset,  struct fuse_file_info *fi) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::unique_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -258,7 +263,7 @@ namespace fuse_driver {
     }
 
     int Driver::link_(const char *src_path, const char *dst_path) {
-        std::unique_lock lock{fs.layout_lock};
+        std::unique_lock layout_lock{fs.layout_lock};
 
         file_system::Inode* src_inode = fs.get_node(src_path);
         if (src_inode == nullptr) {
@@ -278,7 +283,7 @@ namespace fuse_driver {
     }
 
     int Driver::unlink_(const char *path) {
-        std::unique_lock lock{fs.layout_lock};
+        std::unique_lock layout_lock{fs.layout_lock};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -311,7 +316,7 @@ namespace fuse_driver {
     }
 
     int Driver::rename_(const char* src_path, const char *dst_path) {
-        std::unique_lock lock{fs.layout_lock};
+        std::unique_lock layout_lock{fs.layout_lock};
 
         file_system::Inode* src_inode = fs.get_node(src_path);
         if (src_inode == nullptr) {
@@ -376,7 +381,7 @@ namespace fuse_driver {
     }
 
     int Driver::mknod_(const char *path, mode_t mode, dev_t dev) {
-        std::unique_lock lock{fs.layout_lock};
+        std::unique_lock layout_lock{fs.layout_lock};
 
         file_system::Inode* inode = fs.get_node(path);
 
@@ -420,7 +425,8 @@ namespace fuse_driver {
     }
 
     int Driver::opendir_(const char *path, struct fuse_file_info *fi) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
 
@@ -444,7 +450,8 @@ namespace fuse_driver {
     }
 
     int Driver::readdir_(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -465,7 +472,7 @@ namespace fuse_driver {
     }
 
     int Driver::mkdir_(const char *path, mode_t mode) {
-        std::unique_lock lock{fs.layout_lock};
+        std::unique_lock layout_lock{fs.layout_lock};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode != nullptr) {
@@ -511,7 +518,7 @@ namespace fuse_driver {
     }
 
     int Driver::rmdir_(const char *path) {
-        std::unique_lock lock{fs.layout_lock};
+        std::unique_lock layout_lock{fs.layout_lock};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -556,7 +563,8 @@ namespace fuse_driver {
     }
 
     int Driver::utimens_(const char* path, const struct timespec tv[2]) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -584,7 +592,8 @@ namespace fuse_driver {
     }
 
     int Driver::chmod_(const char* path, mode_t mode) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::unique_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {
@@ -599,7 +608,8 @@ namespace fuse_driver {
     }
 
     int Driver::chown_(const char* path, uid_t uid, gid_t gid) {
-        std::unique_lock lock{fs.layout_lock};
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::unique_lock file_lock{fs.get_inode_lock(path)};
 
         file_system::Inode* inode = fs.get_node(path);
         if (inode == nullptr) {

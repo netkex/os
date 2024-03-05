@@ -57,13 +57,17 @@ namespace file_system {
 
     class FS {
     public:
-        FS();
+        FS(size_t lock_pool_size);
         Inode* get_node(const std::string& path);
         bool add_node(const std::string& path, Inode* node);
         bool remove_node(const std::string& path);
+        std::shared_mutex& get_inode_lock(const std::string& path);
 
-        std::mutex layout_lock;
+        std::shared_mutex layout_lock;        
     private: 
         std::unordered_map<std::string, Inode*> fs;
+        std::hash<std::string> path_hasher;
+        size_t lock_pool_size;
+        std::vector<std::shared_mutex> inode_lock_pool;
     };
 }

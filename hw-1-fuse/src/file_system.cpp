@@ -38,7 +38,7 @@ namespace file_system {
 
     Dir::Dir(const Inode_stat& stat): Inode{stat} { }
 
-    FS::FS() { }
+    FS::FS(size_t lock_pool_size): lock_pool_size{lock_pool_size}, inode_lock_pool{lock_pool_size} { }
 
     Inode* FS::get_node(const std::string& path) {
         if (!fs.count(path)) 
@@ -72,5 +72,9 @@ namespace file_system {
         }
         fs.erase(path);
         return true;
+    }
+
+    std::shared_mutex& FS::get_inode_lock(const std::string& path) {
+        return inode_lock_pool[path_hasher(path) % lock_pool_size];
     }
 }
