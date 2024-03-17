@@ -40,12 +40,12 @@ namespace file_system {
 
     class File: public Inode {
     public:
-        File(const Inode_stat& stat);
+        // preallocated_data has to be exactly init_capacity bytes
+        File(const Inode_stat& stat, char* preallocated_data);
         ~File(); 
 
         char* data;
         size_t capacity = init_capacity;
-    private: 
         static const size_t init_capacity = 10;
     };
 

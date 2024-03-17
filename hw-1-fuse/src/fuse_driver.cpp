@@ -87,7 +87,7 @@ namespace fuse_driver {
     Driver::Driver(): fs{10} { 
         file_system::Inode_stat root_stats(
             file_system::Node_type::dir, 
-            0666, 
+            0777, 
             get_current_time_spec(),
             get_current_uid(),
             get_current_gid()
@@ -200,6 +200,9 @@ namespace fuse_driver {
         }
         if (file->capacity < (size_t) size) {
             char* new_data = (char*) malloc(size * sizeof(char));
+            if (new_data == nullptr) {
+                return -ENOMEM;
+            }
             memcpy(new_data, file->data, file->stat.content_size * sizeof(char));
             std::swap(new_data, file->data);
             free(new_data);
@@ -249,6 +252,9 @@ namespace fuse_driver {
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
         if (file->capacity < (size_t)(offset + size)) {
             char* new_data = (char*) malloc((offset + size) * sizeof(char));
+            if (new_data == nullptr) {
+                return -ENOMEM;
+            }
             memcpy(new_data, file->data, file->stat.content_size * sizeof(char));
             std::swap(new_data, file->data);
             free(new_data);
@@ -416,7 +422,12 @@ namespace fuse_driver {
             get_current_uid(),
             get_current_gid()
         );
-        file_system::File* new_file = new file_system::File(stat);
+        char* data = (char*) malloc(file_system::File::init_capacity * sizeof(char));
+        if (data == nullptr) {
+            return -ENOMEM;
+        }
+
+        file_system::File* new_file = new file_system::File(stat, data);
         
         fs.add_node(path, new_file);
         parent_dir->sub_nodes[sub_path] = new_file;

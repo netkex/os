@@ -28,9 +28,7 @@ namespace file_system {
         return stat.node_type;
     }
 
-    File::File(const Inode_stat& stat): Inode{stat} {
-        data = (char*) malloc(init_capacity * sizeof(char));
-    }
+    File::File(const Inode_stat& stat, char* preallocated_data): Inode{stat}, data{preallocated_data} { }
 
     File::~File() {
         free(data);
