@@ -615,7 +615,7 @@ namespace fuse_driver {
         if (inode == nullptr) {
             return -ENOENT;
         }
-        if (!check_acess(inode->stat, 1)) {
+        if (get_current_uid() != 0) {
             return -EACCES;
         }
         
@@ -668,7 +668,7 @@ namespace fuse_driver {
         gid_t cgid = get_current_gid();
 
         if (cuid == 0) 
-            return 0;
+            return true;
 
         int RA, WA, XA;
         RA = S_IROTH;
