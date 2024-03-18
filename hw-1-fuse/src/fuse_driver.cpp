@@ -175,7 +175,14 @@ namespace fuse_driver {
         if (inode == nullptr) {
             return -ENOENT;
         }
-        if (!check_access_(inode, path, 0)) {
+        
+        if ((fi->flags & O_ACCMODE) == O_RDONLY && !check_access_(inode, path, 0)) {
+            return -EACCES;
+        }
+        if ((fi->flags & O_ACCMODE) == O_WRONLY && !check_access_(inode, path, 1)) {
+            return -EACCES;
+        }
+        if ((fi->flags & O_ACCMODE) == O_RDWR && (!check_access_(inode, path, 0) || !check_access_(inode, path, 1))) {
             return -EACCES;
         }
 
@@ -242,7 +249,7 @@ namespace fuse_driver {
         if (inode->type() == file_system::Node_type::dir) {
             return -EISDIR;
         }
-        if (!check_access_(inode, path, 0)) {
+        if ((fi->flags & O_ACCMODE) == O_WRONLY || !check_access_(inode, path, 0)) {
             return -EACCES;
         }
 
@@ -263,11 +270,16 @@ namespace fuse_driver {
         if (inode->type() == file_system::Node_type::dir) {
             return -EISDIR;
         }
-        if (!check_access_(inode, path, 1)) {
+        if ((fi->flags & O_ACCMODE) == O_RDONLY || !check_access_(inode, path, 1)) {
             return -EACCES;
         }
 
         file_system::File* file = reinterpret_cast<file_system::File*>(inode);
+        
+        if (fi->flags & O_APPEND) {
+            offset = file->stat.content_size;
+        }
+
         if (file->capacity < (size_t)(offset + size)) {
             char* new_data = (char*) malloc((offset + size) * sizeof(char));
             if (new_data == nullptr) {
