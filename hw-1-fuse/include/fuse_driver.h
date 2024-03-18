@@ -68,5 +68,9 @@ namespace fuse_driver {
         friend int utimens(const char* path, const struct timespec tv[2]);
         friend int chmod(const char* path, mode_t mode);
         friend int chown(const char* path, uid_t uid, gid_t gid);
+
+        // operation_type: 0 - read, 1 - write, 2 - execute
+        bool check_access_(file_system::Inode* inode, const std::string& path, int operation_type);
+        bool check_parent_path_x_(const std::string& path);
     };
 }
