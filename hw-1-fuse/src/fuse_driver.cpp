@@ -12,6 +12,10 @@ namespace fuse_driver {
     gid_t get_current_gid();
     mode_t get_current_umask();
 
+    void* init(struct fuse_conn_info *ci) {
+        return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->init_(ci);
+    }
+
     int getattr(const char *path, struct stat *stbuf) {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->getattr_(path, stbuf);
     }
@@ -84,23 +88,7 @@ namespace fuse_driver {
         return reinterpret_cast<Driver*>(fuse_get_context()->private_data)->chown_(path, uid, gid);
     }
 
-    Driver::Driver(): fs{10} { 
-        file_system::Inode_stat root_stats(
-            file_system::Node_type::dir, 
-            0777, 
-            get_current_time_spec(),
-            get_current_uid(),
-            get_current_gid()
-        );
-        file_system::Dir* root_dir = new file_system::Dir(root_stats);
-
-        fs.add_node("/", root_dir);
-        fs.add_node("/.", root_dir);
-        fs.add_node("/..", root_dir);
-        root_dir->sub_nodes["."] = root_dir;
-        root_dir->sub_nodes[".."] = root_dir;
-        root_dir->stat.nlinks += 2;
-    }
+    Driver::Driver(): fs{10} { }
 
     int Driver::run_fuse(int fuse_argc, char *fuse_argv[]) {
         static struct fuse_operations fuse_oper = {
@@ -121,6 +109,7 @@ namespace fuse_driver {
             .opendir = opendir,
             .readdir = readdir,
             .releasedir = releasedir,
+            .init = init,
             .utimens = utimens
         };
         return fuse_main(fuse_argc, fuse_argv, &fuse_oper, this);
@@ -140,6 +129,25 @@ namespace fuse_driver {
         delete[] argv[0];
         delete[] argv[1];
         return res;
+    }
+
+    void* Driver::init_(struct fuse_conn_info *ci) {
+        file_system::Inode_stat root_stats(
+            file_system::Node_type::dir, 
+            0777, 
+            get_current_time_spec(),
+            get_current_uid(),
+            get_current_gid()
+        );
+        file_system::Dir* root_dir = new file_system::Dir(root_stats);
+
+        fs.add_node("/", root_dir);
+        fs.add_node("/.", root_dir);
+        fs.add_node("/..", root_dir);
+        root_dir->sub_nodes["."] = root_dir;
+        root_dir->sub_nodes[".."] = root_dir;
+        root_dir->stat.nlinks += 2;
+        return this;
     }
 
     int Driver::getattr_(const char *path, struct stat *stbuf) {

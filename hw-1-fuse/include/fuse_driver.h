@@ -28,6 +28,8 @@ namespace fuse_driver {
         Driver(Driver&  other) = delete;
         Driver(Driver&& other) = delete;
         
+        void* init_(struct fuse_conn_info *ci);
+
         int getattr_(const char *path, struct stat *stbuf);
         
         int open_(const char *path, struct fuse_file_info *fi);
@@ -50,6 +52,7 @@ namespace fuse_driver {
         int chmod_(const char* path, mode_t mode);
         int chown_(const char* path, uid_t uid, gid_t gid);
 
+        friend void* init(struct fuse_conn_info *ci);
         friend int getattr(const char *path, struct stat *stbuf);
         friend int open(const char *path, struct fuse_file_info *fi);
         friend int release(const char *path, struct fuse_file_info *fi);
@@ -62,6 +65,7 @@ namespace fuse_driver {
         friend int mknod(const char *path, mode_t mode, dev_t dev);
         friend int opendir(const char *path, struct fuse_file_info *fi);
         friend int releasedir(const char *path, struct fuse_file_info *fi);
+
         friend int readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi);
         friend int mkdir(const char *path, mode_t mode);
         friend int rmdir(const char *path);
