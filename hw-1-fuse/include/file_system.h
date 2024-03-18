@@ -24,10 +24,11 @@ namespace file_system {
         struct timespec time_accessed;
         uid_t uid;
         gid_t gid;
-
+        
         int32_t inode_id;
         size_t content_size;
         nlink_t nlinks;
+        int open;
         Inode_stat(Node_type node_type, mode_t mode, struct timespec time_created, uid_t uid, gid_t gid);
         struct stat fuse_stat();
     };

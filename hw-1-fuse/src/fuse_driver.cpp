@@ -171,11 +171,21 @@ namespace fuse_driver {
             return -EACCES;
         }
 
+        inode->stat.open += 1;
         fi->fh = inode->stat.inode_id;
         return 0;
     }
 
     int Driver::release_(const char *path, struct fuse_file_info *fi) {
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
+
+        file_system::Inode* inode = fs.get_node(path);
+        if (inode == nullptr) {
+            return -ENOENT;
+        }
+
+        inode->stat.open -= 1;
         return 0;
     }
 
@@ -454,12 +464,25 @@ namespace fuse_driver {
             return -EACCES;
         }
 
+        inode->stat.open += 1;
         fi->fh = inode->stat.inode_id;
-
         return 0;
     }
 
     int Driver::releasedir_(const char *path, struct fuse_file_info *fi) {
+        std::shared_lock layout_lock{fs.layout_lock};
+        std::shared_lock file_lock{fs.get_inode_lock(path)};
+
+        file_system::Inode* inode = fs.get_node(path);
+
+        if (inode == nullptr) {
+            return -ENOENT;
+        }
+        if (inode->type() != file_system::Node_type::dir) {
+            return -ENOTDIR;
+        }
+
+        inode->stat.open -= 1;
         return 0;
     }
 

@@ -10,6 +10,7 @@ namespace file_system {
         content_size = (node_type == Node_type::dir) ? 4096 : 0;
         time_modified = time_accessed = time_created;
         nlinks = 0;
+        open = 0;
     }
 
     struct stat Inode_stat::fuse_stat() {
